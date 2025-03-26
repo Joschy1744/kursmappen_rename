@@ -1,0 +1,81 @@
+Lösungsschritte:
+1️⃣ Poppler installieren
+Windows (empfohlen)
+Lade Poppler für Windows herunter:
+👉 https://github.com/oschwartz10612/poppler-windows/releases
+
+Entpacke den Ordner an einen sicheren Speicherort (z. B. C:\poppler).
+
+Füge den Poppler-Binärpfad zur PATH-Variable hinzu:
+
+Drücke Win + R, gib sysdm.cpl ein und drücke Enter.
+
+Gehe zu Erweitert → Umgebungsvariablen.
+
+Wähle Path unter Systemvariablen und klicke auf Bearbeiten.
+
+Klicke auf Neu und füge den bin-Ordner hinzu (z. B. C:\poppler\Library\bin).
+
+Bestätige mit OK und starte PowerShell neu.
+
+2️⃣ Teste die Installation
+Gib in PowerShell ein:
+
+powershell
+Kopieren
+Bearbeiten
+pdftoppm -v
+Falls die Installation korrekt ist, siehst du die Poppler-Version.
+
+3️⃣ Skript anpassen (Falls Poppler nicht im PATH ist)
+Falls du pdftoppm nicht in den Systempfad aufnehmen willst, ändere die Zeile in deinem Skript:
+
+powershell
+Kopieren
+Bearbeiten
+& "pdftoppm" -png -f 1 -singlefile "$PdfPath" "$ImagePath"
+zu:
+
+powershell
+Kopieren
+Bearbeiten
+& "C:\poppler\Library\bin\pdftoppm.exe" -png -f 1 -singlefile "$PdfPath" "$ImagePath"
+Ersetze C:\poppler\Library\bin\ mit dem richtigen Installationspfad.
+
+Nach diesen Schritten sollte das Skript ohne Probleme laufen. Lass mich wissen, falls du weitere Hilfe brauchst! 😊
+
+
+Tesseract Installieren
+
+https://github.com/UB-Mannheim/tesseract/wiki
+
+Falls du kein Chocolatey hast, kannst du Tesseract manuell installieren:
+
+Lade Tesseract für Windows herunter:
+👉 https://github.com/UB-Mannheim/tesseract/wiki
+
+Installiere das Programm (Standardpfad: C:\Program Files\Tesseract-OCR).
+
+Füge Tesseract zu den Umgebungsvariablen (PATH) hinzu:
+
+Drücke Win + R, gib sysdm.cpl ein und drücke Enter.
+
+Gehe zu Erweitert → Umgebungsvariablen.
+
+Wähle Path unter Systemvariablen und klicke auf Bearbeiten.
+
+Klicke auf Neu und füge hinzu:
+
+makefile
+Kopieren
+Bearbeiten
+C:\Program Files\Tesseract-OCR
+Bestätige mit OK und starte PowerShell neu.
+
+Teste die Installation:
+
+powershell
+Kopieren
+Bearbeiten
+tesseract -v
+Falls Tesseract erkannt wird, kannst du dein Skript erneut ausführen.
