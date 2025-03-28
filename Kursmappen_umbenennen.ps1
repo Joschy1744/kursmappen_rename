@@ -10,6 +10,31 @@ function Write-Log {
     Write-Host $Message
 }
 
+
+# Liste der bekannten Fächer (kann erweitert werden)
+$FaecherListe = @("Klasenlehrer", "Tutor", "Englisch", "Deutsch", "Mathematik", "Geschichte", "Politik und Wirtschaft", "Politik", "Powi", "Ethik", "Spanisch", "Französisch", "Arbeitslehre", "Schreibförderung", "Sport", "Chemie", "Physik", "Biologie", "Erdkunde", "Geographie", "Kunst", "Musik", "Darstellendes Spiel", "Religion")
+
+# Sucht in den ertsten 10 Zeilen nach dem Vorkommen des Faches
+function Find-FachInTopLines {
+    param (
+        [string[]]$Lines
+    )
+
+    
+    
+    # Durchsuche die ersten 10 Zeilen nach einem Fach (auch als Teilwort)
+    for ($i = 0; $i -lt [Math]::Min(10, $Lines.Count); $i++) {
+        foreach ($Fach in $FaecherListe) {
+            if ($Lines[$i] -match "($Fach)\w*") {  # \w* erlaubt Erweiterungen (z. B. Sporta → Sport)
+                Write-Log "📖 Fach in den ersten 10 Zeilen gefunden: $Matches[1]"
+                return $Matches[1]  # Gibt das Basisfach zurück
+            }
+        }
+    }
+
+    return "Unbekannt"
+}
+
 # Funktion zur Erkennung des Halbjahres
 function Get-Halbjahr {
     param ([string]$Text)
@@ -53,7 +78,66 @@ function Get-FachKlasseKurs {
     return @{ Fach = "Unbekannt"; Klasse = "Unbekannt"; Kursbezeichnung = "Unbekannt" }
 }
 
+# Erkannte Muster für Kursbezeichnungen
+# Beispiel	Erklärung
+# 101G21	Muster 1: 3 Zahlen + 1-4 Buchstaben + 2 Zahlen
+# -1AB20	Muster 2: -1 oder -2 + 1-4 Buchstaben + 2 Zahlen
+# ÜGMA23	Muster 3: ÜG + 1-4 Buchstaben + 2-4 Zahlen
+# Q1GK24	Muster 4: E1, E2, Q1, Q2, Q3, Q4 + 1-4 Buchstaben + 2 Zahlen
 
+function Find-Kursbezeichnung {
+    param (
+        [string[]]$Lines
+    )
+
+    # Reguläre Ausdrücke für Kursbezeichnungen
+    $Patterns = @(
+        "\b(\d{3}[A-Za-z]{1,4}\d{2})\b",    # Muster 1: 101G21
+        "\b(-[12][A-Za-z]{1,4}\d{2})\b",    # Muster 2: -1AB20 oder -2XYZ99
+        "\b(ÜG[A-Za-z]{1,4}\d{2,4})\b",     # Muster 3: ÜGMA23
+        "\b(E[12]|Q[1-4])[A-Za-z]{1,4}\d{2}\b" # Muster 4: E1GK24, Q2MA21
+    )
+
+    # Durchsuche die ersten 10 Zeilen nach einer Kursbezeichnung
+    for ($i = 0; $i -lt [Math]::Min(10, $Lines.Count); $i++) {
+        foreach ($Pattern in $Patterns) {
+            if ($Lines[$i] -match $Pattern) {
+                Write-Log "📌 Kursbezeichnung gefunden: $Matches[1]"
+                return $Matches[1]  # Gibt den gefundenen Wert zurück
+            }
+        }
+    }
+
+    return "Unbekannt"
+}
+
+# Muster für Klassennamen
+# Beispiel	Erklärung
+# 10ah	Regulär: 2 Zahlen + 1 Buchstabe (a-f) + 1 Buchstabe (h, r, g)
+# 05 a g	Mit Leerzeichen: 2 Zahlen + Leerzeichen + Buchstabe (a-f) + Leerzeichen + (h, r, g)
+# O9ah	OCR-Fehler: O erkannt als 0
+
+
+function Find-Klasse {
+    param (
+        [string[]]$Lines
+    )
+
+    # Regulärer Ausdruck für Klassennamen
+    $Pattern = "\b([01O][5-9O]|10)\s?([a-fA-F])\s?([hrgHRG])\b"
+
+    # Durchsuche die ersten 10 Zeilen nach einer Klasse
+    for ($i = 0; $i -lt [Math]::Min(10, $Lines.Count); $i++) {
+        if ($Lines[$i] -match $Pattern) {
+            # Ersetze falsch erkannte "O" mit "0"
+            $Klasse = "$($Matches[1])$($Matches[2])$($Matches[3])" -replace "O", "0"
+            Write-Log "🏫 Klasse gefunden: $Klasse"
+            return $Klasse  # Gibt den gefundenen Klassennamen zurück
+        }
+    }
+
+    return "Unbekannt"
+}
 # Funktion zur Texterkennung und Umbenennung der Datei
 function Rename-Pdf { 
     param ([string]$PdfPath)
@@ -81,7 +165,7 @@ $Lines = $Lines | ForEach-Object {
 }
 
 # Log-Ausgabe zum Überprüfen
-#$Lines | ForEach-Object { Write-Log "Zeile: $_" }
+$Lines | ForEach-Object { Write-Log "Zeile: $_" }
 # Log-Ausgabe
 #$OcrText | fl
 
@@ -101,24 +185,37 @@ Write-Log "🏫 Klasse: $($FachKlasseKurs.Klasse)"
 Write-Log "📌 Kursbezeichnung: $($FachKlasseKurs.Kursbezeichnung)"
 
 
-    # Wenn Fach unbekannt ist, versuche es durch die Zeile vor der "bei"-Zeile zu finden
-    if ($FachKlasseKurs.Fach -eq "Unbekannt") {
-        $BeiIndex = $Lines | Select-String -Pattern "^bei\s" | Select-Object -First 1 | ForEach-Object { $_.LineNumber }
-        if ($BeiIndex -gt 0) {
-            # Die Zeile vor der "bei"-Zeile könnte das Fach enthalten
-            $PrevLine = $Lines[$BeiIndex - 2]
-            Write-Log "Zeile vor 'bei': $PrevLine"
-        if ($PrevLine -match "(\w+)\s+([A-Za-z0-9]+)") {
-                # Fach und Klasse extrahieren
-                $FachKlasseKurs.Fach = $Matches[1]
-                $FachKlasseKurs.Klasse = $Matches[2]
-                Write-Log "📖 Fach nach 'bei' gefunden: $($FachKlasseKurs.Fach)"
-                Write-Log "🏫 Klasse nach 'bei' gefunden: $($FachKlasseKurs.Klasse)"
-            }
+   # Wenn Fach unbekannt ist, versuche es durch die Zeile vor der "bei"-Zeile zu finden
+if ($FachKlasseKurs.Fach -eq "Unbekannt") {
+    $BeiIndex = $Lines | Select-String -Pattern "^bei\s" | Select-Object -First 1 | ForEach-Object { $_.LineNumber }
+    if ($BeiIndex -gt 0) {
+        # Die Zeile vor der "bei"-Zeile könnte Fach und Klasse enthalten
+        $PrevLine = $Lines[$BeiIndex - 2]
+        Write-Log "Zeile vor 'bei': $PrevLine"
+
+        # Regulärer Ausdruck zur Extraktion des Fachs, der Klassen und des Kurses
+        if ($PrevLine -match "^(.+?)\s*\(([^)]+)\)\s*(\(([^)]+)\))?$") {
+            $FachKlasseKurs.Fach = $Matches[1].Trim()
+            $FachKlasseKurs.Klasse = $Matches[2].Trim()
+            $FachKlasseKurs.Kursbezeichnung = if ($Matches[4]) { $Matches[4].Trim() } else { "Unbekannt" }
+            Write-Log "📖 Fach nach 'bei' gefunden: $($FachKlasseKurs.Fach)"
+            Write-Log "🏫 Klasse nach 'bei' gefunden: $($FachKlasseKurs.Klasse)"
+            Write-Log "📌 Kursbezeichnung nach 'bei' gefunden: $($FachKlasseKurs.Kursbezeichnung)"
         }
     }
+}
 
+if ($FachKlasseKurs.Fach -eq "Unbekannt") {
+    $FachKlasseKurs.Fach = Find-FachInTopLines -Lines $Lines
+}
 
+if ($FachKlasseKurs.Kursbezeichnung -eq "Unbekannt") {
+    $FachKlasseKurs.Kursbezeichnung = Find-Kursbezeichnung -Lines $Lines
+}
+
+if ($FachKlasseKurs.Klasse -eq "Unbekannt") {
+    $FachKlasseKurs.Klasse = Find-Klasse -Lines $Lines
+}
 
 # Extrahiere Lehrkraft und Kürzel
 $LehrkraftMatch = ($Lines | Where-Object { $_ -match "^bei\s" }) -match "bei\s+([A-Za-zÄÖÜäöüß\-]+\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+)*)\s*\(([^)]+)\)"
@@ -140,7 +237,7 @@ Write-Log "👤 Lehrkraft: $LehrkraftName"
 Write-Log "🔠 Kürzel: $LehrkraftKuerzel"
 
 # Wenn mehr als drei Werte unbekannt sind oder das Jahr/Name nicht erkannt wurden, bleibe beim alten Namen
-    if ( $LehrkraftName -eq "Unbekannt" -or $LehrkraftKuerzel -eq "Unbekannt" -or $FachKlasseKurs.Fach -eq "Unbekannt" -or $FachKlasseKurs.Klasse -eq "Unbekannt") {
+    if (( $LehrkraftName -eq "Unbekannt" -or $LehrkraftKuerzel -eq "Unbekannt" ) -and $FachKlasseKurs.Fach -eq "Unbekannt" ) {
         Write-Log "⚠️ Ein oder mehrere wichtige Werte sind unbekannt, behalte den alten Dateinamen bei: $PdfPath"
         # Bild löschen
         Remove-Item "$ImagePath.png" -Force
